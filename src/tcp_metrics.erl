@@ -54,11 +54,18 @@ lookup(<<A, B, C, D>>) ->
 
 
 %%% PRIVATE
+-spec create_port(inet:ip4_address()) -> port().
+
+-ifdef(LINUX).
+
+create_port(SourceAddress) ->
+    Args = ["5", string_of_ip4_address(SourceAddress)],
+    open_port({spawn_executable, port_path("tcp_metrics_port")},
+              [binary, exit_status, {args, Args}]).
 
 -spec port_path(string()) -> string().
 port_path(Name) ->
     filename:join([priv_dir(), Name]).
-
 
 -spec priv_dir() -> string().
 priv_dir() ->
@@ -70,29 +77,43 @@ priv_dir() ->
         Dir -> Dir
     end.
 
-
 -spec string_of_ip4_address(inet:ip4_address()) -> string().
 string_of_ip4_address(A) ->
     string:join([integer_to_list(O) || O <- tuple_to_list(A)], ".").
 
+-else.
 
--spec create_port(inet:ip4_address()) -> port().
-create_port(SourceAddress) ->
-    Args = ["5", string_of_ip4_address(SourceAddress)],
-    open_port({spawn_executable, port_path("tcp_metrics_port")},
-              [binary, exit_status, {args, Args}]).
+create_port(_SourceAddress) ->
+    not_linux.
+
+-endif.
 
 
 -spec loop(#state{}) -> ok.
-loop(#state{port = undefined, source_address = SourceAddress} = State) ->
-    loop(State#state{port = create_port(SourceAddress), buffer = <<>>});
-loop(#state{port = Port,
-            buffer = Buffer} = State) ->
+loop(#state {
+        port = undefined,
+        source_address = SourceAddress
+    } = State) ->
+
+    loop(State#state {
+        port = create_port(SourceAddress),
+        buffer = <<>>
+    });
+loop(#state {
+        port = Port,
+        buffer = Buffer
+    } = State) ->
+
     receive
         {_Port, {data, In}} ->
-            loop(State#state{buffer = process(<<Buffer/bytes, In/bytes>>)});
+            loop(State#state {
+                buffer = process(<<Buffer/bytes, In/bytes>>)
+            });
         {_Port, {exit_status, _Status}} ->
-            loop(State#state{port = undefined, buffer = undefined});
+            loop(State#state {
+                port = undefined,
+                buffer = undefined
+            });
         stop ->
             port_close(Port),
             ok
