@@ -26,12 +26,18 @@ start_link() ->
 init(Parent) ->
     proc_lib:init_ack(Parent, {ok, self()}),
     ets:new(?TABLE, [set, {read_concurrency, true}, named_table]),
-    SourceAddress =
-        case application:get_env(tcp_metrics, source_address) of
-            {ok, X} -> X;
-            _ -> {0,0,0,0}
-        end,
-    loop(#state{source_address = SourceAddress}).
+    loop(#state{source_address = source_address()}).
+
+source_address() ->
+    case os:getenv("TCP_METRICS_SOURCE_ADDR") of
+        false ->
+            case application:get_env(tcp_metrics, source_address) of
+                {ok, X} -> X;
+                _ -> {0,0,0,0}
+            end;
+        SourceAddress ->
+            SourceAddress
+    end.
 
 
 %% lookup the estimated RTT in millisecs for an IP.
